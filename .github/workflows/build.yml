@@ -1,0 +1,114 @@
+# Convertitore Audio — a cura di Massimiliano Mascioli Trippa
+# Crea le versioni macOS (Apple Silicon e Intel), Windows e Linux.
+#   - Actions > Build > Run workflow: solo i pacchetti, scaricabili come artifact
+#   - push di un tag "v*" (es. v1.1.0): pacchetti + Release pubblica con i download
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            os: macos-14
+            asset: ConvertitoreAudio-macOS-AppleSilicon.zip
+          - name: macOS Intel
+            os: macos-15-intel
+            asset: ConvertitoreAudio-macOS-Intel.zip
+          - name: Windows
+            os: windows-latest
+            asset: ConvertitoreAudio-Windows-x64.zip
+          - name: Linux
+            os: ubuntu-22.04
+            asset: ConvertitoreAudio-Linux-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Librerie di sistema (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tk8.6 tcl8.6 xvfb
+
+      - name: Dipendenze
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Verifica FFmpeg (encoder e filtri usati)
+        shell: bash
+        run: |
+          python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+          FF=$(python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")
+          "$FF" -hide_banner -version | head -1
+          "$FF" -hide_banner -encoders | grep -E "libmp3lame|pcm_s16le"
+          for f in silencedetect loudnorm atrim aresample pan volume; do
+            "$FF" -hide_banner -filters | grep -qE "^ [.A-Z]+ $f " || { echo "manca il filtro $f"; exit 1; }
+          done
+
+      - name: Build
+        run: pyinstaller --noconfirm --clean ConvertitoreAudio.spec
+
+      - name: Prova di avvio
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   APP="dist/Convertitore Audio.app/Contents/MacOS/Convertitore Audio" ;;
+            Windows) APP="dist/Convertitore Audio.exe" ;;
+            Linux)   APP="dist/ConvertitoreAudio" ;;
+          esac
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a "$APP" & else "$APP" & fi
+          PID=$!
+          sleep 20
+          kill -0 "$PID"          # ancora in esecuzione dopo 20 s: avvio riuscito
+          kill "$PID" || true
+
+      - name: Pacchetto
+        shell: bash
+        working-directory: dist
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   ditto -c -k --keepParent "Convertitore Audio.app" "${{ matrix.asset }}" ;;
+            Windows) 7z a "${{ matrix.asset }}" "Convertitore Audio.exe" ;;
+            Linux)   tar -czf "${{ matrix.asset }}" ConvertitoreAudio ;;
+          esac
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Pubblica la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la assets
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Convertitore Audio ${GITHUB_REF_NAME#v}" \
+            --notes-file .github/release-notes.md
