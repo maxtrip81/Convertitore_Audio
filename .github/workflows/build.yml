@@ -57,6 +57,9 @@ jobs:
             "$FF" -hide_banner -filters | grep -qE "^ [.A-Z]+ $f " || { echo "manca il filtro $f"; exit 1; }
           done
 
+      - name: Test conversione MP3 con taglio dei silenzi
+        run: python tests/test_trim_mp3.py
+
       - name: Build
         run: pyinstaller --noconfirm --clean ConvertitoreAudio.spec
 

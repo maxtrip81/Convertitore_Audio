@@ -1,6 +1,6 @@
 # Convertitore Audio — MP3 320 / WAV
 
-**A cura di Massimiliano Mascioli Trippa** · versione 1.1.1 · macOS, Windows e Linux
+**A cura di Massimiliano Mascioli Trippa** · versione 1.1.2 · macOS, Windows e Linux
 
 **[⬇ Scarica l'ultima versione](../../releases/latest)**
 
@@ -40,8 +40,8 @@ Ogni file convertito riporta il nome del programma nei metadati:
 
 | Formato | Campo | Valore |
 |---|---|---|
-| MP3 | ID3 TENC, «Codificato da» | `Convertitore Audio 1.1.1 - a cura di Massimiliano Mascioli Trippa` |
-| WAV | INFO ITCH | `Convertitore Audio 1.1.1 - a cura di Massimiliano Mascioli Trippa` |
+| MP3 | ID3 TENC, «Codificato da» | `Convertitore Audio 1.1.2 - a cura di Massimiliano Mascioli Trippa` |
+| WAV | INFO ITCH | `Convertitore Audio 1.1.2 - a cura di Massimiliano Mascioli Trippa` |
 | WAV | BWF `bext` originator, chunk broadcast | `Convertitore Audio` |
 
 Il campo «Codificato da» si vede, ad esempio, in Esplora risorse (Proprietà → Dettagli), VLC, Mp3tag e foobar2000. Il campo «Software» (TSSE/ISFT) viene invece scritto sempre da FFmpeg con il proprio nome e non si può modificare.
@@ -109,8 +109,8 @@ Ogni pacchetto va creato sul proprio sistema. Serve Python 3.9 o successivo da [
 
 - Per pubblicare una nuova versione, invia un tag che inizia con `v`: il workflow crea la Release con i file da scaricare.
   ```bash
-  git tag v1.1.1
-  git push origin v1.1.1
+  git tag v1.2.0
+  git push origin v1.2.0
   ```
 - Per creare i pacchetti senza pubblicare nulla, apri **Actions → Build → Run workflow**: i pacchetti restano scaricabili come *artifact*.
 
@@ -143,7 +143,7 @@ WAV:      -c:a pcm_s16le -ar 44100 -ac 2 -write_bext 1   (+ dither triangolare)
 
 ## English
 
-**Audio Converter**, created by Massimiliano Mascioli Trippa (version 1.1.1). It converts any audio or video file to **MP3 320 kbps CBR, 44,100 Hz stereo** or to **16-bit PCM WAV, 44,100 Hz stereo**. Click **EN** in the top-right corner to switch the interface to English; the app remembers your choice.
+**Audio Converter**, created by Massimiliano Mascioli Trippa (version 1.1.2). It converts any audio or video file to **MP3 320 kbps CBR, 44,100 Hz stereo** or to **16-bit PCM WAV, 44,100 Hz stereo**. Click **EN** in the top-right corner to switch the interface to English; the app remembers your choice.
 
 - **Use:** drop files or folders into the window, or use **Add files…** / **Add folder…**. Then choose the format and the destination, and click **Convert**.
 - **Processing (both on by default):** the app trims leading and trailing silence below −60 dBFS and leaves pauses inside the track untouched. It also normalizes loudness to **EBU R128**: −23 LUFS integrated, −1 dBTP max true peak. It applies a plain gain whenever it can, and a true-peak limiter only when the peaks require one.

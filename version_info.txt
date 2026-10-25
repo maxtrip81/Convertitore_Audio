@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 1, 0),
-    prodvers=(1, 1, 1, 0),
+    filevers=(1, 1, 2, 0),
+    prodvers=(1, 1, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -14,12 +14,12 @@ VSVersionInfo(
       StringTable('041004B0', [
         StringStruct('CompanyName', 'Massimiliano Mascioli Trippa'),
         StringStruct('FileDescription', 'Convertitore Audio - MP3 320 kbps / WAV'),
-        StringStruct('FileVersion', '1.1.1'),
+        StringStruct('FileVersion', '1.1.2'),
         StringStruct('InternalName', 'ConvertitoreAudio'),
         StringStruct('LegalCopyright', 'A cura di Massimiliano Mascioli Trippa'),
         StringStruct('OriginalFilename', 'Convertitore Audio.exe'),
         StringStruct('ProductName', 'Convertitore Audio'),
-        StringStruct('ProductVersion', '1.1.1')
+        StringStruct('ProductVersion', '1.1.2')
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [0x0410, 1200])])

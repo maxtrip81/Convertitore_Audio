@@ -31,7 +31,7 @@ except Exception:  # drag & drop facoltativo
 
 APP_NAME = "Convertitore Audio"
 APP_ID = "ConvertitoreAudio"
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 AUTHOR = "Massimiliano Mascioli Trippa"
 # scritto nei tag del file convertito (MP3: TENC «Codificato da», WAV: ITCH + BWF originator)
 TOOL_TAG = "%s %s - a cura di %s" % (APP_NAME, VERSION, AUTHOR)
@@ -438,8 +438,11 @@ def build_command(ffmpeg, src, dst, fmt, info, soxr=False, plan=None):
         cmd += ["-af", af]
     cmd += ["-metadata", "encoded_by=" + TOOL_TAG]
     if fmt == "mp3":
-        cmd += ["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "44100", "-ac", "2",
-                "-id3v2_version", "3", "-f", "mp3"]
+        # s32p e non fltp: dopo un taglio iniziale la coda di FFmpeg 7.1 può passare a LAME
+        # un ultimo blocco senza margine in memoria, che LAME rifiuta in virgola mobile
+        # ("inadequate AVFrame plane padding"). Con interi a 32 bit il controllo non c'è.
+        cmd += ["-c:a", "libmp3lame", "-sample_fmt", "s32p", "-b:a", "320k", "-ar", "44100",
+                "-ac", "2", "-id3v2_version", "3", "-f", "mp3"]
     else:
         cmd += ["-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", "-rf64", "auto",
                 "-write_bext", "1", "-metadata", "originator=" + APP_NAME, "-f", "wav"]

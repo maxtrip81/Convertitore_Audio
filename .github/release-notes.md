@@ -1,5 +1,10 @@
 **A cura di Massimiliano Mascioli Trippa**
 
+### Novità della 1.1.2
+
+- Risolto l'errore «file danneggiato o non supportato» nella conversione in MP3 con **Taglia il silenzio** attivo. Riguardava circa un MP3 su otto tra quelli senza intestazione LAME, per esempio gli audio di WhatsApp (`.mpeg`). La causa era un difetto di FFmpeg 7.1: dopo il taglio iniziale l'ultimo blocco audio arrivava all'encoder MP3 in una forma che l'encoder rifiutava. La qualità dell'MP3 non cambia, perché il risultato è identico bit per bit.
+- Ogni build esegue ora un test automatico di regressione su questo caso.
+
 ### Novità della 1.1.1
 
 - Il taglio del silenzio finale ora funziona anche con la normalizzazione attiva. Prima, in alcuni file, il silenzio finale restava.
