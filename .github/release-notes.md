@@ -1,5 +1,11 @@
 **A cura di Massimiliano Mascioli Trippa**
 
+### Novità della 1.1.1
+
+- Il taglio del silenzio finale ora funziona anche con la normalizzazione attiva. Prima, in alcuni file, il silenzio finale restava.
+- Se il taglio dei silenzi o la normalizzazione non riescono su un file, il file viene comunque convertito senza elaborazione. Lo stato mostra «Completato · senza elaborazione» e un doppio clic spiega il motivo.
+- I messaggi d'errore riportano la causa reale. Prima il programma poteva indicare per sbaglio «file danneggiato o non supportato».
+
 Converte qualsiasi file audio o video in **MP3 320 kbps** o **WAV 16 bit**, 44.100 Hz stereo. Durante la conversione taglia il silenzio iniziale e finale e normalizza il volume secondo **EBU R128** (−23 LUFS, true peak −1 dBTP). Il nome del programma viene scritto nei tag del file. L'interfaccia è in italiano e in inglese, e FFmpeg è già incluso.
 
 ### Download

@@ -1,6 +1,6 @@
 # Convertitore Audio — MP3 320 / WAV
 
-**A cura di Massimiliano Mascioli Trippa** · versione 1.1.0 · macOS, Windows e Linux
+**A cura di Massimiliano Mascioli Trippa** · versione 1.1.1 · macOS, Windows e Linux
 
 **[⬇ Scarica l'ultima versione](../../releases/latest)**
 
@@ -32,6 +32,7 @@ L'interfaccia è in **italiano** (predefinito) e in **inglese**: si cambia con i
 - **Volume:** ogni file viene misurato e portato a −23 LUFS con un semplice guadagno, che lascia intatta la dinamica. Solo se il guadagno necessario farebbe superare −1 dBTP entra in azione un limitatore true peak. In quel caso il limite di picco prevale, come prevede la norma, e il file può risultare leggermente sotto −23 LUFS.
 - **Sorgenti mono e multicanale:** la misura viene fatta sul risultato stereo finale. Un mono duplicato sui due canali e un 5.1 riportato a stereo escono quindi anch'essi a −23 LUFS.
 - **WAV identici bit per bit:** con le due opzioni disattivate, un WAV già a 16 bit / 44.100 Hz resta identico bit per bit all'originale.
+- **Se l'elaborazione non riesce:** su un file particolare il taglio o la normalizzazione possono fallire. In quel caso il file viene comunque convertito senza elaborazione e lo stato mostra «Completato · senza elaborazione». Con un doppio clic sulla riga si legge il motivo indicato da FFmpeg.
 
 ### Nome del programma nei tag
 
@@ -39,8 +40,8 @@ Ogni file convertito riporta il nome del programma nei metadati:
 
 | Formato | Campo | Valore |
 |---|---|---|
-| MP3 | ID3 TENC, «Codificato da» | `Convertitore Audio 1.1.0 - a cura di Massimiliano Mascioli Trippa` |
-| WAV | INFO ITCH | `Convertitore Audio 1.1.0 - a cura di Massimiliano Mascioli Trippa` |
+| MP3 | ID3 TENC, «Codificato da» | `Convertitore Audio 1.1.1 - a cura di Massimiliano Mascioli Trippa` |
+| WAV | INFO ITCH | `Convertitore Audio 1.1.1 - a cura di Massimiliano Mascioli Trippa` |
 | WAV | BWF `bext` originator, chunk broadcast | `Convertitore Audio` |
 
 Il campo «Codificato da» si vede, ad esempio, in Esplora risorse (Proprietà → Dettagli), VLC, Mp3tag e foobar2000. Il campo «Software» (TSSE/ISFT) viene invece scritto sempre da FFmpeg con il proprio nome e non si può modificare.
@@ -142,7 +143,7 @@ WAV:      -c:a pcm_s16le -ar 44100 -ac 2 -write_bext 1   (+ dither triangolare)
 
 ## English
 
-**Audio Converter**, created by Massimiliano Mascioli Trippa (version 1.1.0). It converts any audio or video file to **MP3 320 kbps CBR, 44,100 Hz stereo** or to **16-bit PCM WAV, 44,100 Hz stereo**. Click **EN** in the top-right corner to switch the interface to English; the app remembers your choice.
+**Audio Converter**, created by Massimiliano Mascioli Trippa (version 1.1.1). It converts any audio or video file to **MP3 320 kbps CBR, 44,100 Hz stereo** or to **16-bit PCM WAV, 44,100 Hz stereo**. Click **EN** in the top-right corner to switch the interface to English; the app remembers your choice.
 
 - **Use:** drop files or folders into the window, or use **Add files…** / **Add folder…**. Then choose the format and the destination, and click **Convert**.
 - **Processing (both on by default):** the app trims leading and trailing silence below −60 dBFS and leaves pauses inside the track untouched. It also normalizes loudness to **EBU R128**: −23 LUFS integrated, −1 dBTP max true peak. It applies a plain gain whenever it can, and a true-peak limiter only when the peaks require one.

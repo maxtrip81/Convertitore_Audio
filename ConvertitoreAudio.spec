@@ -14,7 +14,7 @@ import sys
 import imageio_ffmpeg
 
 APP_NAME = "Convertitore Audio"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
 

@@ -31,7 +31,7 @@ except Exception:  # drag & drop facoltativo
 
 APP_NAME = "Convertitore Audio"
 APP_ID = "ConvertitoreAudio"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 AUTHOR = "Massimiliano Mascioli Trippa"
 # scritto nei tag del file convertito (MP3: TENC «Codificato da», WAV: ITCH + BWF originator)
 TOOL_TAG = "%s %s - a cura di %s" % (APP_NAME, VERSION, AUTHOR)
@@ -73,6 +73,7 @@ ACCENT = "#cc2f12"
 ACCENT_HOVER = "#a92610"
 ACCENT_DISABLED = "#e3a99d"
 OK_GREEN = "#2f7d32"
+WARN_AMBER = "#9a5b00"
 WHITE = "#ffffff"
 
 STRINGS = {
@@ -106,8 +107,12 @@ STRINGS = {
         "st_run": "Conversione… {p}%",
         "st_run_nopct": "Conversione…",
         "st_done": "Completato",
+        "st_warn": "Completato · senza elaborazione",
         "st_error": "Errore",
         "st_cancel": "Annullato",
+        "warn_processing": "Il file è stato convertito, ma senza taglio dei silenzi e senza "
+                           "normalizzazione, perché l'elaborazione non è riuscita.\n\n"
+                           "Messaggio di FFmpeg:",
         "err_noaudio": "nessuna traccia audio",
         "err_unreadable": "file non leggibile o formato non supportato",
         "err_damaged": "file danneggiato o non supportato",
@@ -117,6 +122,8 @@ STRINGS = {
         "sum_running": "Conversione in corso: {done} di {total}",
         "sum_done": "Fatto: {ok} convertiti",
         "sum_done_err": "Fatto: {ok} convertiti, {err} con errori — doppio clic su un errore per i dettagli",
+        "sum_done_warn": "Fatto: {ok} convertiti, {warn} senza elaborazione — doppio clic per i dettagli",
+        "warn_detail_title": "Elaborazione non riuscita",
         "sum_cancel": "Conversione annullata",
         "ffmpeg_ok": "FFmpeg {v}",
         "ffmpeg_missing": "FFmpeg non trovato",
@@ -173,8 +180,11 @@ STRINGS = {
         "st_run": "Converting… {p}%",
         "st_run_nopct": "Converting…",
         "st_done": "Done",
+        "st_warn": "Done · not processed",
         "st_error": "Error",
         "st_cancel": "Cancelled",
+        "warn_processing": "The file was converted without silence trimming and loudness "
+                           "normalization, because the processing failed.\n\nFFmpeg message:",
         "err_noaudio": "no audio track",
         "err_unreadable": "unreadable file or unsupported format",
         "err_damaged": "damaged or unsupported file",
@@ -184,6 +194,8 @@ STRINGS = {
         "sum_running": "Converting: {done} of {total}",
         "sum_done": "Done: {ok} converted",
         "sum_done_err": "Done: {ok} converted, {err} failed — double-click an error for details",
+        "sum_done_warn": "Done: {ok} converted, {warn} not processed — double-click for details",
+        "warn_detail_title": "Processing failed",
         "sum_cancel": "Conversion cancelled",
         "ffmpeg_ok": "FFmpeg {v}",
         "ffmpeg_missing": "FFmpeg not found",
@@ -324,18 +336,22 @@ def loudness_target(audio):
 
 
 def analysis_command(ffmpeg, src, audio, trim, normalize):
-    """Primo passaggio: trova i silenzi e misura la loudness senza scrivere nulla."""
-    filters = []
-    if trim:
-        filters.append("silencedetect=noise=%ddB:duration=%s" % (SILENCE_THRESHOLD_DB, SILENCE_MIN_SECONDS))
+    """Primo passaggio: trova i silenzi e misura la loudness senza scrivere nulla.
+    L'uscita (e quindi la durata riportata da -progress) è il ramo con l'audio originale;
+    la misura di loudness lavora su un ramo separato che termina in anullsink."""
+    detect = ("silencedetect=noise=%ddB:duration=%s" % (SILENCE_THRESHOLD_DB, SILENCE_MIN_SECONDS)
+              if trim else "anull")
     if normalize:
         # misura sul segnale già nella disposizione dei canali finale (es. 5.1 -> stereo)
-        filters.append("aformat=channel_layouts=%s" % ("mono" if audio.get("mono") else "stereo"))
-        filters.append("loudnorm=I=%.1f:TP=%.1f:LRA=50:print_format=json"
-                       % (loudness_target(audio), TRUE_PEAK_MAX))
-    return [ffmpeg, "-hide_banner", "-nostdin", "-i", src, "-map", "0:a:0", "-vn", "-sn", "-dn",
-            "-af", ",".join(filters), "-f", "null", "-progress", "pipe:1", "-nostats",
-            "-loglevel", "info", "-"]
+        graph = ("[0:a:0]asplit=2[a][b];[a]%s[out];[b]aformat=channel_layouts=%s,"
+                 "loudnorm=I=%.1f:TP=%.1f:LRA=50:print_format=json,anullsink"
+                 % (detect, "mono" if audio.get("mono") else "stereo",
+                    loudness_target(audio), TRUE_PEAK_MAX))
+    else:
+        graph = "[0:a:0]%s[out]" % detect
+    return [ffmpeg, "-hide_banner", "-nostdin", "-i", src, "-filter_complex", graph,
+            "-map", "[out]", "-f", "null", "-progress", "pipe:1", "-nostats",
+            "-loglevel", "level+info", "-"]
 
 
 _LOUDNORM_KEYS = ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")
@@ -345,8 +361,9 @@ def analysis_plan(log, total, audio, trim, normalize):
     """Dai risultati dell'analisi ricava taglio, guadagno e durata finale."""
     plan = {"trim": None, "volume": None, "loudnorm": None, "duration": total}
     if trim and total:
-        starts = [float(v) for v in re.findall(r"silence_start: (-?[\d.]+)", log)]
-        ends = [float(v) for v in re.findall(r"silence_end: (-?[\d.]+)", log)]
+        number = r"(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)"
+        starts = [float(v) for v in re.findall(r"silence_start: " + number, log)]
+        ends = [float(v) for v in re.findall(r"silence_end: " + number, log)]
         begin, end = 0.0, None
         if starts and ends and starts[0] <= 0.05:
             begin = ends[0]                     # silenzio iniziale
@@ -426,11 +443,14 @@ def build_command(ffmpeg, src, dst, fmt, info, soxr=False, plan=None):
     else:
         cmd += ["-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", "-rf64", "auto",
                 "-write_bext", "1", "-metadata", "originator=" + APP_NAME, "-f", "wav"]
-    cmd += ["-progress", "pipe:1", "-nostats", "-loglevel", "error", dst]
+    cmd += ["-progress", "pipe:1", "-nostats", "-loglevel", "level+error", dst]
     return cmd
 
 
 _LOG_PREFIX_RE = re.compile(r"^(\[[^\]]*\]\s*)+")
+# con -loglevel level+… ogni riga porta il livello dopo il contesto: "[mp3 @ 0x…] [error] …"
+_LOG_LEVEL_RE = re.compile(r"^(?:\[[^\]]*\]\s*)*?\[(panic|fatal|error|warning|info|verbose|debug|trace)\]\s*")
+_DECODE_ERROR_RE = re.compile(r"Invalid data|Decode error|Error while decoding|could not find codec", re.I)
 
 
 def _parse_time(value):
@@ -461,13 +481,22 @@ def run_ffmpeg(cmd, duration, on_progress, cancel_event, register, bytes_per_sec
     log = []
 
     def drain():
+        level = "info"
         for line in proc.stderr:
-            line = _LOG_PREFIX_RE.sub("", line.strip())
+            line = line.strip()
+            m = _LOG_LEVEL_RE.match(line)
+            if m:
+                level, line = m.group(1), line[m.end():]
+            else:
+                # righe di continuazione (es. il JSON di loudnorm) mantengono il livello precedente
+                line = _LOG_PREFIX_RE.sub("", line)
+            line = line.strip()
             if not line:
                 continue
             if keep_log:
                 log.append(line)
-            if not errors or errors[-1] != line:
+            # nel messaggio d'errore finiscono solo gli errori veri, non avvisi e informazioni
+            if level in ("panic", "fatal", "error") and (not errors or errors[-1] != line):
                 errors.append(line)
 
     t = threading.Thread(target=drain, daemon=True)
@@ -796,6 +825,7 @@ class App:
         for col in ("file", "folder", "status"):
             self.tree.heading(col, anchor="w")
         self.tree.tag_configure("done", foreground=OK_GREEN)
+        self.tree.tag_configure("warn", foreground=WARN_AMBER)
         self.tree.tag_configure("error", foreground=ACCENT)
         self.tree.tag_configure("cancel", foreground=MUTED)
         self.tree.tag_configure("run", foreground=FG)
@@ -1000,7 +1030,8 @@ class App:
         if state == "error":
             first = item["error"].splitlines()[0] if item["error"] else ""
             return "%s: %s" % (self.t("st_error"), first) if first else self.t("st_error")
-        return self.t({"wait": "st_wait", "done": "st_done", "cancel": "st_cancel"}[state])
+        return self.t({"wait": "st_wait", "done": "st_done", "warn": "st_warn",
+                       "cancel": "st_cancel"}[state])
 
     def _render(self, iid):
         item = self.items[iid]
@@ -1015,6 +1046,11 @@ class App:
             messagebox.showerror(self.t("err_detail_title"),
                                  "%s\n\n%s" % (os.path.basename(item["src"]), item["error"]),
                                  parent=self.root)
+        elif item and item["state"] == "warn":
+            messagebox.showwarning(self.t("warn_detail_title"),
+                                   "%s\n\n%s\n%s" % (os.path.basename(item["src"]),
+                                                     self.t("warn_processing"), item["error"]),
+                                   parent=self.root)
 
     def _set_summary(self, key, kw):
         self._summary = (key, kw)
@@ -1063,7 +1099,8 @@ class App:
         if not self.items:
             messagebox.showinfo(APP_TITLES[self.lang], self.t("err_empty"), parent=self.root)
             return
-        batch = [iid for iid in self.tree.get_children() if self.items[iid]["state"] != "done"]
+        batch = [iid for iid in self.tree.get_children()
+                 if self.items[iid]["state"] not in ("done", "warn")]
         if not batch:
             messagebox.showinfo(APP_TITLES[self.lang], self.t("all_done"), parent=self.root)
             return
@@ -1150,27 +1187,45 @@ class App:
                 raise ConversionError(self.t("err_noaudio"))
             if self.cancel_event.is_set():
                 raise Cancelled()
-            # 1° passaggio (solo se serve): silenzi e loudness, pari al 40% dell'avanzamento
-            plan, duration, base, span = None, info["duration"], 0, 100
+            # 1° passaggio (solo se serve): silenzi e loudness, pari al 40% dell'avanzamento.
+            # Se l'elaborazione non riesce, il file viene comunque convertito senza.
+            plan, duration, base, span, problem = None, info["duration"], 0, 100, ""
             if settings["trim"] or settings["normalize"]:
                 self.q.put(("item", iid, "analyze", 0, ""))
-                log, total = self._run(
-                    analysis_command(self.ffmpeg, src, info["audio"], settings["trim"], settings["normalize"]),
-                    info["duration"], lambda pct: self.q.put(("item", iid, "analyze", pct * 40 // 100, "")),
-                    keep_log=True)
-                plan = analysis_plan(log, total or info["duration"], info["audio"],
-                                     settings["trim"], settings["normalize"])
-                duration, base, span = plan["duration"], 40, 60
+                try:
+                    log, total = run_ffmpeg(
+                        analysis_command(self.ffmpeg, src, info["audio"], settings["trim"], settings["normalize"]),
+                        info["duration"], lambda pct: self.q.put(("item", iid, "analyze", pct * 40 // 100, "")),
+                        self.cancel_event, self._register_proc, keep_log=True)
+                    plan = analysis_plan(log, total or info["duration"], info["audio"],
+                                         settings["trim"], settings["normalize"])
+                    duration = plan["duration"]
+                except Cancelled:
+                    raise
+                except Exception as exc:
+                    problem = str(exc).strip() or exc.__class__.__name__
+                base, span = 40, 60
             # 2° passaggio: conversione
             out = self._reserve_output(src, settings)
-            cmd = build_command(self.ffmpeg, src, out, settings["fmt"], info, self.soxr, plan)
             with self.lock:
                 self.active_outputs.add(out)
-            self._run(cmd, duration, lambda pct: self.q.put(("item", iid, "run", base + pct * span // 100, "")),
-                      bytes_per_sec=40000 if settings["fmt"] == "mp3" else 176400)
+            progress = lambda pct: self.q.put(("item", iid, "run", base + pct * span // 100, ""))
+            bps = 40000 if settings["fmt"] == "mp3" else 176400
+            try:
+                run_ffmpeg(build_command(self.ffmpeg, src, out, settings["fmt"], info, self.soxr, plan),
+                           duration, progress, self.cancel_event, self._register_proc, bytes_per_sec=bps)
+            except ConversionError as exc:
+                if not plan:
+                    raise ConversionError(self._friendly_error(str(exc)))
+                problem = str(exc)
+                self._run(build_command(self.ffmpeg, src, out, settings["fmt"], info, self.soxr),
+                          info["duration"], progress, bytes_per_sec=bps)
             with self.lock:
                 self.active_outputs.discard(out)
-            self.q.put(("item", iid, "done", 100, out))
+            if problem:
+                self.q.put(("item", iid, "warn", 100, (out, problem)))
+            else:
+                self.q.put(("item", iid, "done", 100, out))
         except Cancelled:
             self._discard(out)
             self.q.put(("item", iid, "cancel", None, ""))
@@ -1190,7 +1245,7 @@ class App:
     def _friendly_error(self, details):
         if "Permission denied" in details or "Read-only file system" in details:
             summary = self.t("err_write")
-        elif re.search(r"Invalid data|Decode error|Error while decoding|could not find codec", details, re.I):
+        elif _DECODE_ERROR_RE.search(details):
             summary = self.t("err_damaged")
         else:
             return details
@@ -1219,7 +1274,9 @@ class App:
                     item["state"], item["pct"] = state, pct
                     if state == "error":
                         item["error"] = extra
-                    elif state == "done":
+                    elif state in ("done", "warn"):
+                        if state == "warn":
+                            extra, item["error"] = extra
                         item["out"] = extra
                         if not self.last_output_dir or self.var_dest_mode.get() == "same":
                             self.last_output_dir = os.path.dirname(extra)
@@ -1240,7 +1297,7 @@ class App:
             item = self.items.get(iid)
             if item is None:
                 continue
-            if item["state"] in ("done", "error", "cancel"):
+            if item["state"] in ("done", "warn", "error", "cancel"):
                 finished += 1
                 frac += 1
             elif item["state"] in ("analyze", "run") and item["pct"]:
@@ -1251,12 +1308,15 @@ class App:
     def _on_finished(self):
         self._set_running(False)
         states = [self.items[i]["state"] for i in self.batch if i in self.items]
-        ok, err = states.count("done"), states.count("error")
+        warn, err = states.count("warn"), states.count("error")
+        ok = states.count("done") + warn
         self.pb["value"] = 1000 if not self.cancel_event.is_set() else self.pb["value"]
         if self.cancel_event.is_set():
             self._set_summary("sum_cancel", {})
         elif err:
             self._set_summary("sum_done_err", {"ok": ok, "err": err})
+        elif warn:
+            self._set_summary("sum_done_warn", {"ok": ok, "warn": warn})
         else:
             self._set_summary("sum_done", {"ok": ok})
         if ok and self.last_output_dir:
